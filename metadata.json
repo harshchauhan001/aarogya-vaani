@@ -1,0 +1,6 @@
+{
+  "name": "AarogyaVaani",
+  "description": "AI-powered pre-consultation clinical history taking platform for Indian hospitals (SIH26047) under Ayushman Bharat Digital Mission (ABDM) and AIIMS OPD intake workflow.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,186 @@
+{
+  "entities": {
+    "Patient": {
+      "title": "Patient",
+      "description": "Global registered OPD patient profile linked to national ABHA ID and demographic info across hospitals (carries no UHID)",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique patient ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Patient full name"
+        },
+        "age": {
+          "type": "number",
+          "description": "Patient age in years"
+        },
+        "gender": {
+          "type": "string",
+          "description": "Gender identity"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact mobile number"
+        },
+        "district": {
+          "type": "string",
+          "description": "District of residence"
+        },
+        "state": {
+          "type": "string",
+          "description": "State of residence"
+        },
+        "abhaId": {
+          "type": "string",
+          "description": "Ayushman Bharat Health Account 14-digit number, constant across all hospitals"
+        },
+        "abhaAddress": {
+          "type": "string",
+          "description": "ABHA virtual address ending in @abdm"
+        },
+        "emergencyContact": {
+          "type": "string",
+          "description": "Emergency contact phone number"
+        },
+        "preferredLanguage": {
+          "type": "string",
+          "description": "Preferred language code"
+        },
+        "mode": {
+          "type": "string",
+          "description": "Intake mode: kiosk, mobile, or asha"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID if authenticated"
+        },
+        "userEmail": {
+          "type": "string",
+          "description": "Firebase Auth email"
+        },
+        "registeredAt": {
+          "type": "string",
+          "description": "ISO timestamp of initial registration"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of profile update"
+        }
+      },
+      "required": ["id", "name", "gender", "abhaId"]
+    },
+    "HospitalRegistration": {
+      "title": "HospitalRegistration",
+      "description": "Hospital-scoped registration record binding a patient to a specific hospital, storing hospital-specific UHID",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Composite registration ID (patient_id + hospital_id)"
+        },
+        "patientId": {
+          "type": "string",
+          "description": "Reference to global patient document ID"
+        },
+        "hospitalId": {
+          "type": "string",
+          "description": "Identifier of the hospital facility (e.g. aiims_delhi, safdarjung_delhi)"
+        },
+        "hospitalName": {
+          "type": "string",
+          "description": "Name of the hospital facility"
+        },
+        "uhid": {
+          "type": "string",
+          "description": "Unique Hospital Identification Number assigned specifically by this hospital"
+        },
+        "firstVisitAt": {
+          "type": "string",
+          "description": "ISO timestamp of first visit/registration at this hospital"
+        },
+        "lastVisitAt": {
+          "type": "string",
+          "description": "ISO timestamp of most recent visit at this hospital"
+        },
+        "visitCount": {
+          "type": "number",
+          "description": "Total visits recorded at this hospital"
+        },
+        "tokenNumber": {
+          "type": "number",
+          "description": "Latest daily queue token number at this hospital"
+        }
+      },
+      "required": ["id", "patientId", "hospitalId", "uhid"]
+    },
+    "Encounter": {
+      "title": "Encounter",
+      "description": "OPD clinical consultation encounter record",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Encounter identifier"
+        },
+        "patientId": {
+          "type": "string",
+          "description": "Reference to patient ID"
+        },
+        "hospitalId": {
+          "type": "string",
+          "description": "Hospital identifier where encounter took place"
+        },
+        "uhid": {
+          "type": "string",
+          "description": "Hospital-specific UHID for this encounter"
+        },
+        "tokenNumber": {
+          "type": "number",
+          "description": "Token number"
+        },
+        "departmentId": {
+          "type": "string",
+          "description": "OPD specialty ID"
+        },
+        "doctorName": {
+          "type": "string",
+          "description": "Consulting doctor"
+        },
+        "status": {
+          "type": "string",
+          "description": "Encounter status"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        }
+      },
+      "required": ["id", "patientId", "hospitalId", "uhid", "tokenNumber"]
+    }
+  },
+  "firestore": {
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Global patient registry storing demographic data and national ABHA ID across hospitals (strictly no UHID)"
+    },
+    "/patients/{patientId}/hospital_registrations/{hospitalId}": {
+      "schema": "HospitalRegistration",
+      "description": "Subcollection storing hospital-scoped registration and hospital-specific UHID for this patient"
+    },
+    "/hospital_registrations/{registrationId}": {
+      "schema": "HospitalRegistration",
+      "description": "Hospital-scoped registration records indexed by patient_id + hospital_id containing hospital-specific UHID"
+    },
+    "/encounters/{encounterId}": {
+      "schema": "Encounter",
+      "description": "Collection of OPD encounters and clinical triage entries"
+    },
+    "/sessions/{sessionId}": {
+      "schema": "Encounter",
+      "description": "Active kiosk intake and triage sessions scoped by hospital"
+    }
+  }
+}

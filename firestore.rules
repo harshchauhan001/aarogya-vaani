@@ -1,0 +1,86 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidPatient(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             (!('name' in data) || (data.name is string && data.name.size() <= 150)) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+             (!('abhaId' in data) || (data.abhaId is string && data.abhaId.size() <= 50));
+    }
+
+    function isValidHospitalRegistration(data) {
+      return (!('patientId' in data) || (data.patientId is string && data.patientId.size() <= 128)) &&
+             (!('abhaId' in data) || (data.abhaId is string && data.abhaId.size() <= 64)) &&
+             (!('hospitalId' in data) || (data.hospitalId is string && data.hospitalId.size() <= 64)) &&
+             (!('hospital_id' in data) || (data.hospital_id is string && data.hospital_id.size() <= 64)) &&
+             (!('uhid' in data) || (data.uhid is string && data.uhid.size() <= 64));
+    }
+
+    function isValidEncounter(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             (!('tokenNumber' in data) || (data.tokenNumber is number)) &&
+             (!('hospitalId' in data) || (data.hospitalId is string && data.hospitalId.size() <= 64));
+    }
+
+    // Global Patients collection: strictly demographic and national ABHA ID
+    // Top-level document does NOT contain hospital-specific UHID
+    match /patients/{patientId} {
+      allow get, list: if true;
+      allow create: if isValidId(patientId) && isValidPatient(request.resource.data);
+      allow update: if isValidId(patientId) && isValidPatient(request.resource.data);
+      allow delete: if true;
+
+      // Hospital-scoped registration subcollection under patient
+      match /hospital_registrations/{hospitalId} {
+        allow get, list: if true;
+        allow create, update: if isValidId(hospitalId);
+        allow delete: if true;
+      }
+
+      // Patient visits subcollection scoped by hospital
+      match /visits/{visitId} {
+        allow get, list: if true;
+        allow create, update: if isValidId(visitId);
+        allow delete: if true;
+      }
+    }
+
+    // Hospital-scoped registrations collection (patient_id + hospital_id)
+    // Stores the hospital-specific UHID
+    match /hospital_registrations/{registrationId} {
+      allow get, list: if true;
+      allow create: if isValidId(registrationId) && isValidHospitalRegistration(request.resource.data);
+      allow update: if isValidId(registrationId) && isValidHospitalRegistration(request.resource.data);
+      allow delete: if true;
+    }
+
+    // Encounters collection: clinical encounters and visits scoped by hospital_id
+    match /encounters/{encounterId} {
+      allow get, list: if true;
+      allow create: if isValidId(encounterId) && isValidEncounter(request.resource.data);
+      allow update: if isValidId(encounterId) && isValidEncounter(request.resource.data);
+      allow delete: if true;
+    }
+
+    // Sessions collection: active kiosk intake sessions scoped by hospital_id
+    match /sessions/{sessionId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(sessionId);
+      allow delete: if true;
+    }
+
+    // Test connection doc
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+  }
+}
