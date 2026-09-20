@@ -1,86 +1,268 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Default-deny catch-all
-    match /{document=**} {
-      allow read, write: if true;
+
+    /*
+     * ============================================================
+     * AarogyaVaani - SIH Demo Firestore Rules
+     * ============================================================
+     *
+     * The application uses Firebase Anonymous Authentication.
+     * Therefore request.auth != null means that the application
+     * has successfully created an anonymous Firebase session.
+     *
+     * The SIH prototype uses a fixed demo hospital:
+     * DCH-001
+     *
+     * These rules are intended for the SIH prototype/demo.
+     * They are NOT a substitute for production healthcare
+     * authorization, auditing, or regulatory compliance.
+     */
+
+    /*
+     * ------------------------------------------------------------
+     * Helper functions
+     * ------------------------------------------------------------
+     */
+
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string
+        && id.size() > 0
+        && id.size() <= 128
+        && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    function isValidPatient(data) {
-      return data.id is string && data.id.size() <= 128 &&
-             (!('name' in data) || (data.name is string && data.name.size() <= 150)) &&
-             (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
-             (!('abhaId' in data) || (data.abhaId is string && data.abhaId.size() <= 50));
+    function isDemoHospital(hospitalId) {
+      return hospitalId == 'DCH-001';
     }
 
-    function isValidHospitalRegistration(data) {
-      return (!('patientId' in data) || (data.patientId is string && data.patientId.size() <= 128)) &&
-             (!('abhaId' in data) || (data.abhaId is string && data.abhaId.size() <= 64)) &&
-             (!('hospitalId' in data) || (data.hospitalId is string && data.hospitalId.size() <= 64)) &&
-             (!('hospital_id' in data) || (data.hospital_id is string && data.hospital_id.size() <= 64)) &&
-             (!('uhid' in data) || (data.uhid is string && data.uhid.size() <= 64));
+    function isPatientDocument(data) {
+      return data.id is string
+        && data.id.size() > 0
+        && data.id.size() <= 128
+        && (!('name' in data) ||
+            (data.name is string && data.name.size() <= 150))
+        && (!('phone' in data) ||
+            (data.phone is string && data.phone.size() <= 30))
+        && (!('abhaId' in data) ||
+            (data.abhaId is string && data.abhaId.size() <= 50));
     }
 
-    function isValidEncounter(data) {
-      return data.id is string && data.id.size() <= 128 &&
-             (!('tokenNumber' in data) || (data.tokenNumber is number)) &&
-             (!('hospitalId' in data) || (data.hospitalId is string && data.hospitalId.size() <= 64));
+    function isHospitalRegistration(data) {
+      return (!('patientId' in data) ||
+              (data.patientId is string && data.patientId.size() <= 128))
+        && (!('abhaId' in data) ||
+              (data.abhaId is string && data.abhaId.size() <= 64))
+        && (!('hospitalId' in data) ||
+              isDemoHospital(data.hospitalId))
+        && (!('hospital_id' in data) ||
+              isDemoHospital(data.hospital_id))
+        && (!('uhid' in data) ||
+              (data.uhid is string && data.uhid.size() <= 64));
     }
 
-    // Global Patients collection: strictly demographic and national ABHA ID
-    // Top-level document does NOT contain hospital-specific UHID
+    function isEncounter(data) {
+      return data.id is string
+        && data.id.size() > 0
+        && data.id.size() <= 128
+        && (!('hospitalId' in data) ||
+            isDemoHospital(data.hospitalId))
+        && (!('hospital_id' in data) ||
+            isDemoHospital(data.hospital_id));
+    }
+
+    function isSession(data) {
+      return (!('hospitalId' in data) ||
+              isDemoHospital(data.hospitalId))
+        && (!('hospital_id' in data) ||
+              isDemoHospital(data.hospital_id));
+    }
+
+
+    /*
+     * ------------------------------------------------------------
+     * PATIENTS
+     * ------------------------------------------------------------
+     *
+     * The current SIH application searches patients by ABHA ID
+     * and phone number, so authenticated demo sessions need
+     * read access to the collection.
+     *
+     * Writes are validated and require authentication.
+     */
+
     match /patients/{patientId} {
-      allow get, list: if true;
-      allow create: if isValidId(patientId) && isValidPatient(request.resource.data);
-      allow update: if isValidId(patientId) && isValidPatient(request.resource.data);
-      allow delete: if true;
 
-      // Hospital-scoped registration subcollection under patient
+      allow get, list: if isAuthenticated();
+
+      allow create, update:
+        if isAuthenticated()
+        && isValidId(patientId)
+        && isPatientDocument(request.resource.data);
+
+      allow delete:
+        if isAuthenticated();
+
+
+      /*
+       * ----------------------------------------------------------
+       * Patient hospital registrations
+       * ----------------------------------------------------------
+       */
+
       match /hospital_registrations/{hospitalId} {
-        allow get, list: if true;
-        allow create, update: if isValidId(hospitalId);
-        allow delete: if true;
+
+        allow get, list:
+          if isAuthenticated()
+          && isDemoHospital(hospitalId);
+
+        allow create, update:
+          if isAuthenticated()
+          && isDemoHospital(hospitalId)
+          && isHospitalRegistration(request.resource.data);
+
+        allow delete:
+          if isAuthenticated()
+          && isDemoHospital(hospitalId);
       }
 
-      // Patient visits subcollection scoped by hospital
+
+      /*
+       * ----------------------------------------------------------
+       * Patient visits
+       * ----------------------------------------------------------
+       */
+
       match /visits/{visitId} {
-        allow get, list: if true;
-        allow create, update: if isValidId(visitId);
-        allow delete: if true;
+
+        allow get, list:
+          if isAuthenticated();
+
+        allow create, update:
+          if isAuthenticated()
+          && isValidId(visitId)
+          && isEncounter(request.resource.data);
+
+        allow delete:
+          if isAuthenticated();
       }
     }
 
-    // Hospital-scoped registrations collection (patient_id + hospital_id)
-    // Stores the hospital-specific UHID
+
+    /*
+     * ------------------------------------------------------------
+     * HOSPITAL REGISTRATIONS
+     * ------------------------------------------------------------
+     *
+     * Stores hospital-specific UHID information.
+     *
+     * The application queries this collection directly to find
+     * existing registrations by ABHA ID, patient ID and UHID.
+     */
+
     match /hospital_registrations/{registrationId} {
-      allow get, list: if true;
-      allow create: if isValidId(registrationId) && isValidHospitalRegistration(request.resource.data);
-      allow update: if isValidId(registrationId) && isValidHospitalRegistration(request.resource.data);
-      allow delete: if true;
+
+      allow get, list:
+        if isAuthenticated();
+
+      allow create, update:
+        if isAuthenticated()
+        && isValidId(registrationId)
+        && isHospitalRegistration(request.resource.data);
+
+      allow delete:
+        if isAuthenticated();
     }
 
-    // Encounters collection: clinical encounters and visits scoped by hospital_id
+
+    /*
+     * ------------------------------------------------------------
+     * ENCOUNTERS
+     * ------------------------------------------------------------
+     *
+     * Encounters are explicitly associated with DCH-001 by
+     * the application.
+     */
+
     match /encounters/{encounterId} {
-      allow get, list: if true;
-      allow create: if isValidId(encounterId) && isValidEncounter(request.resource.data);
-      allow update: if isValidId(encounterId) && isValidEncounter(request.resource.data);
-      allow delete: if true;
+
+      allow get, list:
+        if isAuthenticated();
+
+      allow create, update:
+        if isAuthenticated()
+        && isValidId(encounterId)
+        && isEncounter(request.resource.data);
+
+      allow delete:
+        if isAuthenticated();
     }
 
-    // Sessions collection: active kiosk intake sessions scoped by hospital_id
+
+    /*
+     * ------------------------------------------------------------
+     * SESSIONS
+     * ------------------------------------------------------------
+     *
+     * Active kiosk sessions for the SIH demonstration.
+     */
+
     match /sessions/{sessionId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(sessionId);
-      allow delete: if true;
+
+      allow get, list:
+        if isAuthenticated();
+
+      allow create, update:
+        if isAuthenticated()
+        && isValidId(sessionId)
+        && isSession(request.resource.data);
+
+      allow delete:
+        if isAuthenticated();
     }
 
-    // Test connection doc
+
+    /*
+     * ------------------------------------------------------------
+     * TEST CONNECTION
+     * ------------------------------------------------------------
+     *
+     * firebase.ts calls:
+     * test/connection
+     *
+     * Keep this available only to authenticated sessions.
+     */
+
     match /test/{docId} {
-      allow read, write: if true;
+
+      allow get, list:
+        if isAuthenticated();
+
+      allow create, update:
+        if isAuthenticated()
+        && isValidId(docId);
+
+      allow delete:
+        if isAuthenticated();
+    }
+
+
+    /*
+     * ------------------------------------------------------------
+     * DEFAULT DENY
+     * ------------------------------------------------------------
+     *
+     * Any collection/document not explicitly covered above
+     * is denied.
+     */
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
